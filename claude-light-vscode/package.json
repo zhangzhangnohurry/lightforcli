@@ -1,0 +1,70 @@
+{
+  "name": "claude-light",
+  "displayName": "ClaudeLight",
+  "description": "Traffic light status indicator for Claude Code sessions",
+  "version": "0.1.0",
+  "publisher": "claude-light",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other", "Visualization"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "views": {
+      "claude-light": [
+        {
+          "id": "claude-light-panel",
+          "name": "ClaudeLight",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claude-light",
+          "title": "ClaudeLight",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claude-light.openPanel",
+        "title": "Open ClaudeLight Panel"
+      },
+      {
+        "command": "claude-light.setMode",
+        "title": "Set ClaudeLight Mode"
+      }
+    ],
+    "configuration": {
+      "title": "ClaudeLight",
+      "properties": {
+        "claude-light.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "State server host"
+        },
+        "claude-light.port": {
+          "type": "number",
+          "default": 8765,
+          "description": "State server port"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "eslint": "^8.0.0"
+  }
+}
