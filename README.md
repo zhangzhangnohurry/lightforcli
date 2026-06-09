@@ -82,6 +82,8 @@ bash install-claude-light.sh
 
 #### 1. Install Claude Code hooks
 
+Double-click `install-claude-light.bat`, or run in PowerShell:
+
 ```powershell
 cd C:\path\to\greenredyellow
 powershell -ExecutionPolicy Bypass -File install-claude-light.ps1
