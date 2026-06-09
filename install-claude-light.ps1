@@ -4,6 +4,11 @@
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# Install Python dependencies
+Write-Host "Installing dependencies..."
+python -m pip install -r (Join-Path $Root "requirements.txt")
+
 $Hook = Join-Path $Root "claude_light_hook.py"
 $SettingsDir = Join-Path $env:USERPROFILE ".claude"
 $SettingsJson = Join-Path $SettingsDir "settings.json"

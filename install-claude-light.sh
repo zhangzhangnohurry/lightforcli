@@ -5,6 +5,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Install Python dependencies
+echo "Installing dependencies..."
+python3 -m pip install -r "${ROOT}/requirements.txt"
+
 HOOK="${ROOT}/claude_light_hook.py"
 SETTINGS_DIR="${HOME}/.claude"
 SETTINGS_JSON="${SETTINGS_DIR}/settings.json"
