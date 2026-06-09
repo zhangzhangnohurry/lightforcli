@@ -46,7 +46,11 @@ STATE_SCRIPT = Path(__file__).resolve().parent / "claude_light_state.py"
 DEFAULT_HOST = os.environ.get("CLAUDE_LIGHT_HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("CLAUDE_LIGHT_PORT", "8765"))
 SERVER_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
-CONFIG_PATH = Path(os.environ.get("CLAUDE_LIGHT_CONFIG", Path.home() / ".config" / "claude-light" / "hud.json"))
+if os.name == "nt":
+    _default_config = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "claude-light" / "hud.json"
+else:
+    _default_config = Path.home() / ".config" / "claude-light" / "hud.json"
+CONFIG_PATH = Path(os.environ.get("CLAUDE_LIGHT_CONFIG", str(_default_config)))
 DEFAULT_HUD_SETTINGS = {
     "background": "#0d1117",
     "opacity": 0.78,

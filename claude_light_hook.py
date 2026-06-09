@@ -22,12 +22,11 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 STATE_SCRIPT = ROOT / "claude_light_state.py"
-LOG_PATH = Path(
-    os.environ.get(
-        "CLAUDE_LIGHT_LOG",
-        Path.home() / ".local" / "state" / "claude-light" / "hook.log",
-    )
-)
+if os.name == "nt":
+    _default_log = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "claude-light" / "hook.log"
+else:
+    _default_log = Path.home() / ".local" / "state" / "claude-light" / "hook.log"
+LOG_PATH = Path(os.environ.get("CLAUDE_LIGHT_LOG", str(_default_log)))
 DEFAULT_HOST = os.environ.get("CLAUDE_LIGHT_HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("CLAUDE_LIGHT_PORT", "8765"))
 

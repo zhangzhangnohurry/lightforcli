@@ -34,7 +34,10 @@ from pathlib import Path
 APP_NAME = "ClaudeLight"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+if os.name == "nt":
+    STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))))
+else:
+    STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
 STATE_PATH = STATE_DIR / "claude-light" / "state.json"
 SESSION_EXPIRE_SECONDS = 30 * 60  # 30 minutes
 
