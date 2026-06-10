@@ -21,7 +21,6 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent
-STATE_SCRIPT = ROOT / "claude_light_state.py"
 if os.name == "nt":
     _default_log = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "claude-light" / "hook.log"
 else:
@@ -349,17 +348,7 @@ def send_to_server(
         with urllib.request.urlopen(request, timeout=1.2):
             pass
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
-        # Server not running — try to save via state script CLI
-        try:
-            import subprocess
-            subprocess.run(
-                [sys.executable or "python3", str(STATE_SCRIPT), "send", mode,
-                 "--session-id", session_id],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=2, check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            log(f"fallback save failed session={session_id} mode={mode}")
+        log(f"server unreachable session={session_id} mode={mode}")
 
 
 def end_session_on_server(session_id: str) -> None:

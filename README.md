@@ -388,6 +388,45 @@ the server maintenance loop.
 - Browser fallback works anywhere the local Python server can run.
 - On Windows, use `python` instead of `python3`; state/config paths use `%LOCALAPPDATA%` / `%APPDATA%`.
 
+## EXE Distribution (Windows)
+
+Pre-built standalone executables (no Python install needed):
+
+```
+claude-light/
+  claude-light-app.exe       ← 双击打开 HUD
+  claude-light-hook.exe      ← Claude Code 后台调用
+  claude-light-0.1.0.vsix    ← VSCode 扩展（可选）
+```
+
+### Install hooks
+
+```
+claude-light-app.exe --install
+```
+
+This registers `claude-light-hook.exe` as the Claude Code hook command in
+`~/.claude/settings.json`.
+
+### Install VSCode extension
+
+```
+claude-light-app.exe --install-vsix
+```
+
+Requires `code` CLI in PATH. Reload VSCode after installing.
+
+### Build exe yourself
+
+On Windows (exe must be built on the target platform):
+
+```bash
+pip install pyinstaller
+python build_exe.py
+```
+
+Output goes to `dist/`. Build targets: `python build_exe.py app` or `python build_exe.py hook`.
+
 ## Troubleshooting
 
 ### `code --install-extension .` says extension not found

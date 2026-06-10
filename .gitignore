@@ -6,8 +6,11 @@ __pycache__/
 dist/
 build/
 node_modules/
+package-lock.json
 .omc/
 .omx/
 *.log
 state.json
+*.vsix
+*.spec
 *.vsix

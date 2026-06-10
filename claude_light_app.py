@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import shutil
 import sys
 import threading
 import time
@@ -42,7 +42,6 @@ from PySide6.QtWidgets import (
 )
 
 
-STATE_SCRIPT = Path(__file__).resolve().parent / "claude_light_state.py"
 DEFAULT_HOST = os.environ.get("CLAUDE_LIGHT_HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("CLAUDE_LIGHT_PORT", "8765"))
 SERVER_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
@@ -790,36 +789,137 @@ class ClaudeLightWindow(QMainWindow):
             widget.animate(t_ms)
 
 
-def start_server_if_needed() -> subprocess.Popen | None:
-    """Start the state server if it's not already running."""
+def start_server_if_needed() -> bool:
+    """Start the state server if it's not already running (daemon thread)."""
     try:
         with urllib.request.urlopen(f"{SERVER_URL}/api/state", timeout=1):
-            return None
+            return True
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
         pass
 
-    proc = subprocess.Popen(
-        [sys.executable, str(STATE_SCRIPT), "serve", "--no-open"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    from claude_light_state import serve, STATE_PATH
+    server_thread = threading.Thread(
+        target=serve,
+        args=(DEFAULT_HOST, DEFAULT_PORT, STATE_PATH, False, True),
+        daemon=True,
     )
+    server_thread.start()
     for _ in range(20):
         try:
             with urllib.request.urlopen(f"{SERVER_URL}/api/state", timeout=0.5):
-                return proc
+                return True
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
             time.sleep(0.5)
-    return proc
+    return False
+
+
+def _exe_dir() -> Path:
+    """Return the directory containing this executable (works for both .py and .exe)."""
+    try:
+        return Path(sys.executable).resolve().parent
+    except (OSError, TypeError):
+        return Path(__file__).resolve().parent
+
+
+def _hook_command() -> str:
+    """Build the hook command string for settings.json."""
+    exe_dir = _exe_dir()
+    if os.name == "nt":
+        hook_exe = exe_dir / "claude-light-hook.exe"
+    else:
+        hook_exe = exe_dir / "claude-light-hook"
+    if hook_exe.exists():
+        return str(hook_exe)
+    # Fallback: use python + hook.py for dev mode
+    hook_py = Path(__file__).resolve().parent / "claude_light_hook.py"
+    python_cmd = sys.executable or "python3"
+    return f"{python_cmd} {hook_py}"
+
+
+def install_hooks() -> int:
+    """Install ClaudeLight hook entries into ~/.claude/settings.json."""
+    settings_dir = Path.home() / ".claude"
+    settings_json = settings_dir / "settings.json"
+
+    settings_dir.mkdir(parents=True, exist_ok=True)
+    command = _hook_command()
+    events = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification"]
+
+    if settings_json.exists():
+        data = json.loads(settings_json.read_text(encoding="utf-8"))
+        backup = settings_json.with_suffix(f".json.bak-{time.strftime('%Y%m%d-%H%M%S')}")
+        shutil.copy2(settings_json, backup)
+    else:
+        data = {}
+        backup = None
+
+    hooks = data.setdefault("hooks", {})
+    for event in events:
+        entries = hooks.setdefault(event, [])
+        found = False
+        for entry in entries:
+            for item in entry.get("hooks", []):
+                if item.get("command") == command:
+                    found = True
+                    break
+            if found:
+                break
+        if not found:
+            entries.append({
+                "matcher": "",
+                "hooks": [{"type": "command", "command": command, "timeout": 2}]
+            })
+
+    settings_json.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Installed ClaudeLight hook: {command}")
+    if backup:
+        print(f"Backup: {backup}")
+    print(f"Updated: {settings_json}")
+    return 0
+
+
+def install_vsix() -> int:
+    """Find and install the VSCode extension .vsix next to the executable."""
+    exe_dir = _exe_dir()
+    vsix_files = list(exe_dir.glob("claude-light-*.vsix"))
+
+    if not vsix_files:
+        # Try the vscode subdirectory
+        vscode_dir = exe_dir / "claude-light-vscode"
+        vsix_files = list(vscode_dir.glob("claude-light-*.vsix"))
+
+    if not vsix_files:
+        print("No .vsix file found. Build it first:")
+        print(f"  cd {exe_dir}/claude-light-vscode && npm install && npm run compile && npx @vscode/vsce package")
+        return 1
+
+    vsix = vsix_files[0]
+    import subprocess
+    result = subprocess.run(["code", "--install-extension", str(vsix)], capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"Installed VSCode extension: {vsix.name}")
+        print("Reload VSCode: Developer → Reload Window")
+        return 0
+    else:
+        print(f"Failed to install: {result.stderr}")
+        return 1
 
 
 def main() -> int:
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--no-server", action="store_true", help="don't auto-start state server")
+    parser.add_argument("--install", action="store_true", help="install Claude Code hooks and exit")
+    parser.add_argument("--install-vsix", action="store_true", help="install VSCode extension and exit")
     args = parser.parse_args()
 
-    server_proc = None
+    if args.install:
+        return install_hooks()
+    if args.install_vsix:
+        return install_vsix()
+
     if not args.no_server:
-        server_proc = start_server_if_needed()
+        start_server_if_needed()
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
@@ -828,10 +928,6 @@ def main() -> int:
     window.show()
 
     result = app.exec()
-
-    if server_proc:
-        server_proc.terminate()
-
     return result
 
 
