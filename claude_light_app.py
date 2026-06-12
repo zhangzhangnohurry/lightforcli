@@ -110,23 +110,35 @@ QMainWindow {{
 }}
 QWidget#Shell {{
     background: {rgba_from_hex(background, opacity)};
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 28px;
 }}
 QFrame#SessionPill {{
     background: rgba(255, 255, 255, 0.065);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: none;
     border-radius: 17px;
 }}
 QFrame#SessionPill[selected="true"] {{
     background: rgba(255, 255, 255, 0.11);
-    border: 1px solid rgba(255, 255, 255, 0.24);
+}}
+QFrame#SessionTower {{
+    background: rgba(255, 255, 255, 0.065);
+    border: none;
+    border-radius: 12px;
+}}
+QFrame#SessionTower[selected="true"] {{
+    background: rgba(255, 255, 255, 0.11);
 }}
 QLabel {{
     color: {COLORS['text']};
 }}
 QLabel#SessionLabel {{
     color: {COLORS['muted']};
+}}
+QLabel#TowerLabel {{
+    color: {COLORS['muted']};
+    font-size: 11px;
+    font-weight: 700;
 }}
 QToolButton#SettingsButton {{
     color: {COLORS['muted']};
@@ -290,6 +302,42 @@ class SessionPillWidget(QFrame):
 
     def animate(self, t_ms: int) -> None:
         self.traffic_light.set_lamps(*lamps_for_mode(self.mode, t_ms))
+
+
+class SessionTowerWidget(QFrame):
+    """Vertical tower column: 3 stacked lamps + session label below."""
+
+    def __init__(self, sid: str, session: dict, label: str, selected: bool) -> None:
+        super().__init__()
+        self.sid = sid
+        self.session = session
+        self.mode = str(session.get("mode") or "off")
+        self.setObjectName("SessionTower")
+        self.setProperty("selected", "true" if selected else "false")
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(4)
+        layout.setContentsMargins(10, 10, 10, 6)
+
+        self.lamp_r = LampWidget("red", "off_red", 16)
+        self.lamp_y = LampWidget("yellow", "off_yellow", 16)
+        self.lamp_g = LampWidget("green", "off_green", 16)
+        layout.addWidget(self.lamp_r, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.lamp_y, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.lamp_g, alignment=Qt.AlignHCenter)
+
+        self.label = QLabel(label)
+        self.label.setObjectName("TowerLabel")
+        self.label.setAlignment(Qt.AlignHCenter)
+        self.label.setMaximumWidth(80)
+        layout.addWidget(self.label)
+
+    def animate(self, t_ms: int) -> None:
+        r, y, g = lamps_for_mode(self.mode, t_ms)
+        self.lamp_r.set_on(r)
+        self.lamp_y.set_on(y)
+        self.lamp_g.set_on(g)
 
 
 class ClaudeLightWindow(QMainWindow):
@@ -529,10 +577,7 @@ class ClaudeLightWindow(QMainWindow):
         self.title_label.setVisible(is_compact)
         self.session_label.setVisible(is_compact)
         self.sessions_panel.setVisible(not is_compact)
-        if mode == "vertical":
-            self.sessions_layout.setDirection(QBoxLayout.Direction.TopToBottom)
-        else:
-            self.sessions_layout.setDirection(QBoxLayout.Direction.LeftToRight)
+        self.sessions_layout.setDirection(QBoxLayout.Direction.LeftToRight)
         self.update_display_entry()
 
     def poll_state(self) -> None:
@@ -638,32 +683,51 @@ class ClaudeLightWindow(QMainWindow):
             self.clear_sessions_panel()
             return
         self.clear_sessions_panel()
+        layout_mode = str(self.hud_settings.get("layout_mode") or "compact")
         diagnostic = self.hud_settings.get("density") == "diagnostic"
         if not self.display_entries:
-            pill = SessionPillWidget("", {"mode": "off"}, "No active workspace", "", True, False)
-            self.session_widgets.append(pill)
-            self.sessions_layout.addWidget(pill)
+            if layout_mode == "vertical":
+                tower = SessionTowerWidget("", {"mode": "off"}, "Off", True)
+                self.session_widgets.append(tower)
+                self.sessions_layout.addWidget(tower)
+            else:
+                pill = SessionPillWidget("", {"mode": "off"}, "No active workspace", "", True, False)
+                self.session_widgets.append(pill)
+                self.sessions_layout.addWidget(pill)
             return
         for sid, session in self.visible_multi_entries():
             name = self.short_session_name(sid, session)
-            detail = self.detail_text_for_session(sid, session)
-            pill = SessionPillWidget(sid, session, name, detail, sid == self.reflected_session_id, diagnostic)
-            pill.setToolTip(self.tooltip_for_session(sid, session))
-            pill.installEventFilter(self)
-            self.session_widgets.append(pill)
-            self.sessions_layout.addWidget(pill)
+            is_selected = sid == self.reflected_session_id
+            if layout_mode == "vertical":
+                label = self.compact_session_id(sid)
+                tower = SessionTowerWidget(sid, session, label, is_selected)
+                tower.setToolTip(self.tooltip_for_session(sid, session))
+                tower.installEventFilter(self)
+                self.session_widgets.append(tower)
+                self.sessions_layout.addWidget(tower)
+            else:
+                detail = self.detail_text_for_session(sid, session)
+                pill = SessionPillWidget(sid, session, name, detail, is_selected, diagnostic)
+                pill.setToolTip(self.tooltip_for_session(sid, session))
+                pill.installEventFilter(self)
+                self.session_widgets.append(pill)
+                self.sessions_layout.addWidget(pill)
         self.sessions_layout.addStretch(1)
 
     def visible_multi_entries(self) -> list[tuple[str, dict]]:
         """Adaptive fill guard: show all sessions until the HUD would become impractically large."""
         entries = self.display_entries
         screen = self.screen() or QApplication.primaryScreen()
-        if not screen or str(self.hud_settings.get("layout_mode")) == "vertical":
-            return entries[:10]
+        if not screen:
+            return entries[:6]
         available_width = max(700, screen.availableGeometry().width() - 80)
-        diagnostic = self.hud_settings.get("density") == "diagnostic"
-        approx_width = 268 if diagnostic else 205
-        max_items = max(1, (available_width - 80) // approx_width)
+        layout_mode = str(self.hud_settings.get("layout_mode") or "compact")
+        if layout_mode == "vertical":
+            max_items = max(1, (available_width - 80) // 62)
+        else:
+            diagnostic = self.hud_settings.get("density") == "diagnostic"
+            approx_width = 268 if diagnostic else 205
+            max_items = max(1, (available_width - 80) // approx_width)
         return entries[:max_items]
 
     def short_session_name(self, sid: str, session: dict) -> str:
@@ -699,10 +763,9 @@ class ClaudeLightWindow(QMainWindow):
         if mode == "compact":
             width, height = 570, 58
         elif mode == "vertical":
-            diagnostic = self.hud_settings.get("density") == "diagnostic"
             count = max(1, len(self.visible_multi_entries()))
-            width = 430 if diagnostic else 360
-            height = min(720, 34 + count * (52 if diagnostic else 43))
+            width = min(1500, 74 + count * 62)
+            height = 108
         else:
             diagnostic = self.hud_settings.get("density") == "diagnostic"
             count = max(1, len(self.visible_multi_entries()))
